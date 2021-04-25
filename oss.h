@@ -21,16 +21,12 @@
 #include <time.h>      
 #include <math.h>	
 
-
 #define BUFFER_LENGTH 4096
 #define MAX_FILE_LINE 100000
-
-
 
 #define TERMINATION_TIME 20
 #define MAX_PROCESS 18
 #define TOTAL_PROCESS 100
-
 
 #define PROCESS_SIZE 32000
 #define PAGE_SIZE 1000
@@ -40,16 +36,13 @@
 #define FRAME_SIZE PAGE_SIZE
 #define MAX_FRAME (MEMORY_SIZE / FRAME_SIZE)
 
-
 typedef unsigned int uint;
 
-// Shared memory
 typedef struct 
 {
 	unsigned int second;
 	unsigned int nanosecond;
 }SharedClock;
-
 
 typedef struct
 {
@@ -61,8 +54,6 @@ typedef struct
 	unsigned int requestPage;
 	char message[BUFFER_LENGTH];
 }Message;
-
-
 
 typedef struct
 {
@@ -80,7 +71,6 @@ typedef struct
 	PageTableEntry page_table[MAX_PAGE];
 }ProcessControlBlock;
 
-//Queue.h
 typedef struct NodeQ
 { 
 	int index;
@@ -95,10 +85,6 @@ typedef struct
 	int count;
 }Queue;
 
-//helper.h
-char *strduplicate(const char *src);
-
-//link list.h
 typedef struct NodeL
 { 
 	int index;
@@ -113,7 +99,8 @@ typedef struct
 	LNode *front;
 }List;
 
-
+void createFile(char *);
+void logOutput(char*, char*, ...);
 char *strduplicate(const char *);
 List *createList();
 LNode *newLNode(int, int, int);
@@ -129,7 +116,5 @@ QNode *deQueue(Queue *);
 bool isQueueEmpty(Queue *);
 int getQueueCount(Queue *);
 char *getQueue(const Queue *);
-
-
 
 #endif

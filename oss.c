@@ -1,10 +1,7 @@
 #include "oss.h"
 
-static FILE *fpw = NULL;
+char* logfile = "logfile";
 static char *exe_name;
-static char log_file[256] = "fifolog.dat";
-static char isDisplayTerminal = false;
-static int algorithm_choice = 0;
 static key_t key;
 static Queue *queue;
 static SharedClock forkclock;
@@ -28,48 +25,40 @@ static unsigned int total_access_time = 0;
 static unsigned char main_memory[MAX_FRAME];
 static int last_frame = -1;
 static List *reference_string;
-static List *lru_stack;
 
-void printWrite(FILE *fpw, char *fmt, ...);
-void masterInterrupt(int seconds);
-void masterHandler(int signum);
-void segHandler(int signum);
-void exitHandler(int signum);
-void timer(int seconds);
+void masterInterrupt(int);
+void masterHandler(int);
+void segHandler(int);
+void exitHandler(int);
+void timer(int);
 void finalize();
-void discardShm(int shmid, void *shmaddr, char *shm_name , char *exe_name, char *process_type);
+void discardShm(int, void *, char *, char *, char *);
 void cleanUp();
-void semaLock(int sem_index);
-void semaRelease(int sem_index);
-int incShmclock(int increment);
-
-void initPCBT(ProcessControlBlock *pcbt);
-char *getPCBT(ProcessControlBlock *pcbt);
-void initPCB(ProcessControlBlock *pcb, int index, pid_t pid);
+void semaLock(int);
+void semaRelease(int);
+int incShmclock(int);
+void initPCBT(ProcessControlBlock *);
+char *getPCBT(ProcessControlBlock *);
+void initPCB(ProcessControlBlock *, int, pid_t);
 
 int main(int argc, char *argv[]) {
 	exe_name = argv[0];
 	srand(getpid());
 	int character, forkCounter = 0;
-	while((character = getopt(argc, argv, "hl:dt")) != -1) {
+	while((character = getopt(argc, argv, "hl:")) != -1) {
 		switch(character) {
 			case 'h':
-				printf("NAME:\n");
+				printf("NAME:\t");
 				printf("	%s - simulate the memory management module and compare LRU and FIFO page replacement algorithms, both with dirty-bit optimization.\n", exe_name);
-				printf("\nUSAGE:\n");
-				printf("	%s [-h] [-l logfile] [-a choice].\n", exe_name);
+				printf("\nUSAGE:\t");
+				printf("	%s [-h] [-l logfile] [-p processes].\n", exe_name);
 				printf("\nDESCRIPTION:\n");
 				printf("	-h           : print the help page and exit.\n");
-				printf("	-l filename  : the log file used (default is fifolog.dat).\n");
-				printf("	-t           : display result in the terminal as well (default is off).\n");
+				printf("	-l filename  : the log file used (default is logfile).\n");
 				exit(EXIT_SUCCESS);
-
 			case 'l':
-				strncpy(log_file, optarg, 255);
-				fprintf(stderr, "Your new log file is: %s\n", log_file);
-				break;
-			case 't':
-				isDisplayTerminal = true;
+				logfile = optarg;
+				fprintf(stderr, "Your new log file is: %s\n", logfile);
 				break;
 			default:
 				fprintf(stderr, "%s: please use \"-h\" option for more info.\n", exe_name);
@@ -77,18 +66,14 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	fpw = fopen(log_file, "w");
-	if(fpw == NULL) {
-		fprintf(stderr, "%s ERROR: unable to write the output file.\n", argv[0]);
-		exit(EXIT_FAILURE);
-	}
+	createFile(logfile);
 
 	memset(bitmap, '\0', sizeof(bitmap));
 
 	key = ftok("./oss.c", 1);
 	mqueueid = msgget(key, IPC_CREAT | 0600);
 	if(mqueueid < 0) {
-		fprintf(stderr, "%s ERROR: could not allocate [message queue] shared memory! Exiting...\n", exe_name);
+		fprintf(stderr, "ERROR: could not allocate [message queue] shared memory! Exiting...\n");
 		cleanUp();
 		exit(EXIT_FAILURE);
 	}
@@ -96,14 +81,14 @@ int main(int argc, char *argv[]) {
 	key = ftok("./oss.c", 2);
 	shmclock_shmid = shmget(key, sizeof(SharedClock), IPC_CREAT | 0600);
 	if(shmclock_shmid < 0) {
-		fprintf(stderr, "%s ERROR: could not allocate [shmclock] shared memory! Exiting...\n", exe_name);
+		fprintf(stderr, "ERROR: could not allocate [shmclock] shared memory! Exiting...\n");
 		cleanUp();
 		exit(EXIT_FAILURE);
 	}
 
 	shmclock_shmptr = shmat(shmclock_shmid, NULL, 0);
 	if(shmclock_shmptr == (void *)( -1 )) {
-		fprintf(stderr, "%s ERROR: fail to attach [shmclock] shared memory! Exiting...\n", exe_name);
+		fprintf(stderr, "ERROR: fail to attach [shmclock] shared memory! Exiting...\n");
 		cleanUp();
 		exit(EXIT_FAILURE);	
 	}
@@ -116,7 +101,7 @@ int main(int argc, char *argv[]) {
 	key = ftok("./oss.c", 3);
 	semid = semget(key, 1, IPC_CREAT | IPC_EXCL | 0600);
 	if(semid == -1) {
-		fprintf(stderr, "%s ERROR: failed to create a new private semaphore! Exiting...\n", exe_name);
+		fprintf(stderr, "ERROR: failed to create a new private semaphore! Exiting...\n");
 		cleanUp();
 		exit(EXIT_FAILURE);
 	}
@@ -127,14 +112,14 @@ int main(int argc, char *argv[]) {
 	size_t process_table_size = sizeof(ProcessControlBlock) * MAX_PROCESS;
 	pcbt_shmid = shmget(key, process_table_size, IPC_CREAT | 0600);
 	if(pcbt_shmid < 0) {
-		fprintf(stderr, "%s ERROR: could not allocate [pcbt] shared memory! Exiting...\n", exe_name);
+		fprintf(stderr, "ERROR: could not allocate [pcbt] shared memory! Exiting...\n");
 		cleanUp();
 		exit(EXIT_FAILURE);
 	}
 
 	pcbt_shmptr = shmat(pcbt_shmid, NULL, 0);
 	if(pcbt_shmptr == (void *)( -1 )) {
-		fprintf(stderr, "%s ERROR: fail to attach [pcbt] shared memory! Exiting...\n", exe_name);
+		fprintf(stderr, "ERROR: fail to attach [pcbt] shared memory! Exiting...\n");
 		cleanUp();
 		exit(EXIT_FAILURE);	
 	}
@@ -143,16 +128,10 @@ int main(int argc, char *argv[]) {
 
 	queue = createQueue();
 	reference_string = createList();
-	if(algorithm_choice == 1) {
-		lru_stack = createList();
-	}
-
 	masterInterrupt(TERMINATION_TIME);
 
-	if(!isDisplayTerminal) {
-		fprintf(stderr, "Simulating...\n");
-	}
-	fprintf(stderr, "Using First In First Out (FIFO) algorithm.\n");
+	printf("Simulating...\n");
+	printf("Using First In First Out (FIFO) algorithm.\n");
 
 	int last_index = -1;
 	while(1) { 
@@ -180,7 +159,7 @@ int main(int argc, char *argv[]) {
 				forkCounter++;
 				pid = fork();
 				if(pid == -1) {
-					fprintf(stderr, "%s (Master) ERROR: %s\n", exe_name, strerror(errno));
+					fprintf(stderr, "(Master) ERROR: %s\n", strerror(errno));
 					finalize();
 					cleanUp();
 					exit(0);
@@ -192,7 +171,7 @@ int main(int argc, char *argv[]) {
 					sprintf(exec_index, "%d", last_index);
 					int exect_status = execl("./get_page", "./get_page", exec_index, NULL);
 					if(exect_status == -1) {	
-						fprintf(stderr, "%s (Child) ERROR: execl fail to execute at index [%d]! Exiting...\n", exe_name, last_index);
+						fprintf(stderr, "(Child) ERROR: execl fail to execute at index [%d]! Exiting...\n", last_index);
 					}
 				
 					finalize();
@@ -204,7 +183,7 @@ int main(int argc, char *argv[]) {
 					initPCB(&pcbt_shmptr[last_index], last_index, pid);
 					enQueue(queue, last_index);
 
-					printWrite(fpw, "%s: generating process with PID (%d) [%d] and putting it in queue at time %d.%d\n", exe_name, 
+					logOutput(logfile, "Generating process with PID (%d) [%d] and putting it in queue at time %d.%d\n", 
 						pcbt_shmptr[last_index].pidIndex, pcbt_shmptr[last_index].actualPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 				}
 			}
@@ -227,8 +206,8 @@ int main(int argc, char *argv[]) {
 			incShmclock(0);
 
 			if(master_message.flag == 0) {
-				printWrite(fpw, "%s: process with PID (%d) [%d] has finish running at my time %d.%d\n",
-					exe_name, master_message.index, master_message.childPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
+				logOutput(logfile, "Process with PID (%d) [%d] has finish running at my time %d.%d\n",
+					master_message.index, master_message.childPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 
 
 				int i;
@@ -246,21 +225,21 @@ int main(int argc, char *argv[]) {
 				unsigned int address = master_message.address;
 				unsigned int request_page = master_message.requestPage;
 				if(pcbt_shmptr[c_index].page_table[request_page].protection == 0) {
- 					printWrite(fpw, "%s: process (%d) [%d] requesting read of address (%d) [%d] at time %d:%d\n", 
-						exe_name, master_message.index, master_message.childPid, 
+ 					logOutput(logfile, "Process (%d) [%d] requesting read of address (%d) [%d] at time %d:%d\n", 
+						master_message.index, master_message.childPid, 
 						address, request_page,
 						shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 				} else {
-					printWrite(fpw, "%s: process (%d) [%d] requesting write of address (%d) [%d] at time %d:%d\n", 
-						exe_name, master_message.index, master_message.childPid, 
+					logOutput(logfile, "Process (%d) [%d] requesting write of address (%d) [%d] at time %d:%d\n", 
+						master_message.index, master_message.childPid, 
 						address, request_page,
 						shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 				}
 				memoryaccess_number++;
 
 				if(pcbt_shmptr[c_index].page_table[request_page].valid == 0) {
- 					printWrite(fpw, "%s: address (%d) [%d] is not in a frame, PAGEFAULT\n",
-						exe_name, address, request_page);
+ 					logOutput(logfile, "Address (%d) [%d] is not in a frame, PAGEFAULT\n",
+						address, request_page);
 					
 					pagefault_number++;
 					total_access_time += incShmclock(14000000);
@@ -285,40 +264,35 @@ int main(int argc, char *argv[]) {
 						pcbt_shmptr[c_index].page_table[request_page].valid = 1;
 						main_memory[last_frame / 8] |= (1 << (last_frame % 8));
 						addListElement(reference_string, c_index, request_page, last_frame);
-						printWrite(fpw, "%s: allocated frame [%d] to PID (%d) [%d]\n",
-							exe_name, last_frame, master_message.index, master_message.childPid);
-				
-						if(algorithm_choice == 1) {
-							deleteListElement(lru_stack, c_index, request_page, last_frame);
-							addListElement(lru_stack, c_index, request_page, last_frame);
-						}
+						logOutput(logfile, "Allocated frame [%d] to PID (%d) [%d]\n",
+							last_frame, master_message.index, master_message.childPid);
 
 						if(pcbt_shmptr[c_index].page_table[request_page].protection == 0) {
-							printWrite(fpw, "%s: address (%d) [%d] in frame (%d), giving data to process (%d) [%d] at time %d:%d\n",
-								exe_name, address, request_page, 
+							logOutput(logfile, "Address (%d) [%d] in frame (%d), giving data to process (%d) [%d] at time %d:%d\n",
+								address, request_page, 
 								pcbt_shmptr[c_index].page_table[request_page].frameNo,
 								master_message.index, master_message.childPid,
 								shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 
 							pcbt_shmptr[c_index].page_table[request_page].dirty = 0;
 						} else {
-							printWrite(fpw, "%s: address (%d) [%d] in frame (%d), writing data to frame at time %d:%d\n",
-								exe_name, address, request_page, 
+							logOutput(logfile, "Address (%d) [%d] in frame (%d), writing data to frame at time %d:%d\n",
+								address, request_page, 
 								pcbt_shmptr[c_index].page_table[request_page].frameNo,
 								shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 
 							pcbt_shmptr[c_index].page_table[request_page].dirty = 1;
 						}
 					} else {
- 						printWrite(fpw, "%s: address (%d) [%d] is not in a frame, memory is full. Invoking page replacement...\n", exe_name, address, request_page);
+ 						logOutput(logfile, "Address (%d) [%d] is not in a frame, memory is full. Invoking page replacement...\n", address, request_page);
 
 						unsigned int fifo_index = reference_string->front->index;
 						unsigned int fifo_page = reference_string->front->page;
 						unsigned int fifo_address = fifo_page << 10;
 						unsigned int fifo_frame = reference_string->front->frame;
 						if(pcbt_shmptr[fifo_index].page_table[fifo_page].dirty == 1) {
-							printWrite(fpw, "%s: address (%d) [%d] was modified. Modified information is written back to the disk\n", 
-										exe_name, fifo_address, fifo_page);
+							logOutput(logfile, "Address (%d) [%d] was modified. Modified information is written back to the disk\n", 
+										fifo_address, fifo_page);
 						}
 
 						pcbt_shmptr[fifo_index].page_table[fifo_page].frameNo = -1;
@@ -332,28 +306,22 @@ int main(int argc, char *argv[]) {
 						addListElement(reference_string, c_index, request_page, fifo_frame);
 
 						if(pcbt_shmptr[c_index].page_table[request_page].protection == 1) {
-							printWrite(fpw, "%s: dirty bit of frame (%d) set, adding additional time to the clock\n", exe_name, last_frame);
-							printWrite(fpw, "%s: indicating to process (%d) [%d] that write has happend to address (%d) [%d]\n", 
-								exe_name, master_message.index, master_message.childPid, address, request_page);
+							logOutput(logfile, "Dirty bit of frame (%d) set, adding additional time to the clock\n", last_frame);
+							logOutput(logfile, "Indicating to process (%d) [%d] that write has happend to address (%d) [%d]\n", 
+								master_message.index, master_message.childPid, address, request_page);
 							pcbt_shmptr[c_index].page_table[request_page].dirty = 1;
 						}
 					}
 				} else {
-					if(algorithm_choice == 1) {
-						int c_frame = pcbt_shmptr[c_index].page_table[request_page].frameNo;
-						deleteListElement(lru_stack, c_index, request_page, c_frame);
-						addListElement(lru_stack, c_index, request_page, c_frame);
-					}
-
 					if(pcbt_shmptr[c_index].page_table[request_page].protection == 0) {
-						printWrite(fpw, "%s: address (%d) [%d] is already in frame (%d), giving data to process (%d) [%d] at time %d:%d\n",
-							exe_name, address, request_page, 
+						logOutput(logfile, "Address (%d) [%d] is already in frame (%d), giving data to process (%d) [%d] at time %d:%d\n",
+							address, request_page, 
 							pcbt_shmptr[c_index].page_table[request_page].frameNo,
 							master_message.index, master_message.childPid,
 							shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 					} else {
-						printWrite(fpw, "%s: address (%d) [%d] is already in frame (%d), writing data to frame at time %d:%d\n",
-							exe_name, address, request_page, 
+						logOutput(logfile, "Address (%d) [%d] is already in frame (%d), writing data to frame at time %d:%d\n",
+							address, request_page, 
 							pcbt_shmptr[c_index].page_table[request_page].frameNo,
 							shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 					}
@@ -396,24 +364,6 @@ int main(int argc, char *argv[]) {
 	return EXIT_SUCCESS; 
 }
 
-void printWrite(FILE *fpw, char *fmt, ...) {
-	char buf[BUFFER_LENGTH];
-	va_list args;
-
-	va_start(args, fmt);
-	vsprintf(buf, fmt, args);
-	va_end(args);
-
-	if(isDisplayTerminal) {
-		fprintf(stderr, buf);
-	}
-
-	if(fpw != NULL) {
-		fprintf(fpw, buf);
-		fflush(fpw);
-	}
-}
-
 void masterInterrupt(int seconds) {	
 	timer(seconds);
 	struct sigaction sa1;
@@ -438,30 +388,27 @@ void masterInterrupt(int seconds) {
 
 void masterHandler(int signum) {
 	finalize();
-
-	double mem_p_sec = (double)memoryaccess_number / (double)shmclock_shmptr->second;
-	double pg_f_p_mem = (double)pagefault_number / (double)memoryaccess_number;
 	double avg_m = (double)total_access_time / (double)memoryaccess_number;
 	avg_m /= 1000000.0;
 
-	printWrite(fpw, "Master PID: %d\n", getpid());
-	printWrite(fpw, "Number of forking during this execution: %d\n", fork_number);
-	printWrite(fpw, "Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
-	printWrite(fpw, "Number of memory accesses: %d\n", memoryaccess_number);
-	printWrite(fpw, "Number of memory accesses per nanosecond: %f memory/second\n", mem_p_sec);
-	printWrite(fpw, "Number of page faults: %d\n", pagefault_number);
-	printWrite(fpw, "Number of page faults per memory access: %f pagefault/access\n", pg_f_p_mem);
-	printWrite(fpw, "Average memory access speed: %f ms/n\n", avg_m);
-	printWrite(fpw, "Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);
-	fprintf(stderr, "SIMULATION RESULT is recorded into the log file: %s\n", log_file);
+	printf("Master PID: %d\n", getpid());
+      	printf("Number of forking during this execution: %d\n", fork_number);
+        printf("Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
+        printf("Number of memory accesses: %d\n", memoryaccess_number);
+        printf("Number of page faults: %d\n", pagefault_number);
+        printf("Average memory access speed: %f ms/n\n", avg_m);
+        printf("Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);	
+
+	logOutput(logfile, "Master PID: %d\n", getpid());
+	logOutput(logfile, "Number of forking during this execution: %d\n", fork_number);
+	logOutput(logfile, "Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
+	logOutput(logfile, "Number of memory accesses: %d\n", memoryaccess_number);
+	logOutput(logfile, "Number of page faults: %d\n", pagefault_number);
+	logOutput(logfile, "Average memory access speed: %f ms/n\n", avg_m);
+	logOutput(logfile, "Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);
+	printf("SIMULATION RESULT is recorded into the log file: %s\n", logfile);
 
 	cleanUp();
-
-	if(fpw != NULL) {
-		fclose(fpw);
-		fpw = NULL;
-	}
-
 	exit(EXIT_SUCCESS); 
 }
 
@@ -500,13 +447,13 @@ void finalize() {
 void discardShm(int shmid, void *shmaddr, char *shm_name , char *exe_name, char *process_type) {
 	if(shmaddr != NULL) {
 		if((shmdt(shmaddr)) << 0) {
-			fprintf(stderr, "%s (%s) ERROR: could not detach [%s] shared memory!\n", exe_name, process_type, shm_name);
+			fprintf(stderr, "(%s) ERROR: could not detach [%s] shared memory!\n", process_type, shm_name);
 		}
 	}
 	
 	if(shmid > 0) {
 		if((shmctl(shmid, IPC_RMID, NULL)) < 0) {
-			fprintf(stderr, "%s (%s) ERROR: could not delete [%s] shared memory! Exiting...\n", exe_name, process_type, shm_name);
+			fprintf(stderr, "(%s) ERROR: could not delete [%s] shared memory! Exiting...\n", process_type, shm_name);
 		}
 	}
 }

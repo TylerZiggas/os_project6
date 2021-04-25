@@ -1,5 +1,37 @@
 #include "oss.h"
 
+void createFile(char* path) { // Creation of file
+	FILE* newFile = fopen(path, "w"); // Take whatever char* was passed
+		if (newFile == NULL) { // If there is a problem creating the file
+			perror("Failed to touch file");
+			exit(EXIT_FAILURE);
+		}
+	fclose(newFile); // Close file at end regardless
+}
+
+int linesInFile = 0;
+
+void logOutput(char* path, char* fmt, ...) {
+	if (linesInFile < 100000) {
+		linesInFile++;
+		FILE* fp = fopen(path, "a+"); // Open a file for writing
+	
+		if (fp == NULL) { // In case of failed logging to file
+			perror("Failed to open file for logging output");
+			exit(EXIT_FAILURE);
+		}
+	
+		int n = 4096; 
+		char buf[n];
+		va_list args; // Intialize to grab all arguments for logging
+		va_start(args, fmt);
+		vsprintf(buf, fmt, args);
+		va_end(args);	
+		fprintf(fp, buf); // Writing to the file 
+		fclose(fp);
+	} 
+}
+
 char *strduplicate(const char *src) {
 	size_t len = strlen(src) + 1;  
 	char *dst = malloc(len);         
