@@ -2,9 +2,7 @@
 
 static FILE *fpw = NULL;
 static char *exe_name;
-static int percentage = 0;
 static char log_file[256] = "fifolog.dat";
-static char isDebugMode = false;
 static char isDisplayTerminal = false;
 static int algorithm_choice = 0;
 static key_t key;
@@ -49,13 +47,10 @@ void initPCBT(ProcessControlBlock *pcbt);
 char *getPCBT(ProcessControlBlock *pcbt);
 void initPCB(ProcessControlBlock *pcb, int index, pid_t pid);
 
-int main(int argc, char *argv[]) 
-{
-
+int main(int argc, char *argv[]) {
 	exe_name = argv[0];
 	srand(getpid());
-
-	int character;
+	int character, forkCounter = 0;
 	while((character = getopt(argc, argv, "hl:dt")) != -1) {
 		switch(character) {
 			case 'h':
@@ -66,7 +61,6 @@ int main(int argc, char *argv[])
 				printf("\nDESCRIPTION:\n");
 				printf("	-h           : print the help page and exit.\n");
 				printf("	-l filename  : the log file used (default is fifolog.dat).\n");
-				printf("	-d           : turn on debug mode (default is off). Beware, result will be different and inconsistent.\n");
 				printf("	-t           : display result in the terminal as well (default is off).\n");
 				exit(EXIT_SUCCESS);
 
@@ -74,11 +68,6 @@ int main(int argc, char *argv[])
 				strncpy(log_file, optarg, 255);
 				fprintf(stderr, "Your new log file is: %s\n", log_file);
 				break;
-
-			case 'd':
-				isDebugMode = true; 
-				break;
-
 			case 't':
 				isDisplayTerminal = true;
 				break;
@@ -163,14 +152,11 @@ int main(int argc, char *argv[])
 	if(!isDisplayTerminal) {
 		fprintf(stderr, "Simulating...\n");
 	}
-	if(isDebugMode) {
-		fprintf(stderr, "DEBUG mode is ON\n");
-	}
 	fprintf(stderr, "Using First In First Out (FIFO) algorithm.\n");
 
 	int last_index = -1;
 	while(1) { 
-		int spawn_nano = (isDebugMode) ? 100 : rand() % 500000000 + 1000000;
+		int spawn_nano = rand() % 500000000 + 1000000;
 		if(forkclock.nanosecond >= spawn_nano) {
 			forkclock.nanosecond = 0;
 
@@ -190,9 +176,9 @@ int main(int argc, char *argv[])
 				count_process++;
 			}
 
-			if(is_bitmap_open == true) {
+			if(is_bitmap_open == true && forkCounter < 40) {
+				forkCounter++;
 				pid = fork();
-
 				if(pid == -1) {
 					fprintf(stderr, "%s (Master) ERROR: %s\n", exe_name, strerror(errno));
 					finalize();
@@ -213,13 +199,6 @@ int main(int argc, char *argv[])
 					cleanUp();
 					exit(EXIT_FAILURE);
 				} else {	
-				
-					if(!isDisplayTerminal && (fork_number == percentage)) {
-						if(fork_number < TOTAL_PROCESS - 1 || TOTAL_PROCESS % 2 != 1) {
-							fprintf(stderr, "%c%c%c%c%c", 219, 219, 219, 219, 219);
-						}
-						percentage += (int)(ceil(TOTAL_PROCESS * 0.1));
-					}
 					fork_number++;
 					bitmap[last_index / 8] |= (1 << (last_index % 8));
 					initPCB(&pcbt_shmptr[last_index], last_index, pid);
@@ -332,9 +311,6 @@ int main(int argc, char *argv[])
 						}
 					} else {
  						printWrite(fpw, "%s: address (%d) [%d] is not in a frame, memory is full. Invoking page replacement...\n", exe_name, address, request_page);
-						if(isDebugMode) {
-							printWrite(fpw, getList(reference_string));
-						}
 
 						unsigned int fifo_index = reference_string->front->index;
 						unsigned int fifo_page = reference_string->front->page;
@@ -354,11 +330,6 @@ int main(int argc, char *argv[])
 							
 						deleteListFirst(reference_string);
 						addListElement(reference_string, c_index, request_page, fifo_frame);
-
-						if(isDebugMode) {
-							printWrite(fpw, "After invoking FIFO algorithm...\n");
-							printWrite(fpw, getList(reference_string));
-						}
 
 						if(pcbt_shmptr[c_index].page_table[request_page].protection == 1) {
 							printWrite(fpw, "%s: dirty bit of frame (%d) set, adding additional time to the clock\n", exe_name, last_frame);
@@ -417,7 +388,7 @@ int main(int argc, char *argv[])
 			bitmap[return_index / 8] &= ~(1 << (return_index % 8));
 		}
 
-		if(fork_number >= TOTAL_PROCESS) {
+		if(fork_number >= TOTAL_PROCESS || forkCounter >= 40) {
 			timer(0);
 			masterHandler(0);
 		}
@@ -443,10 +414,7 @@ void printWrite(FILE *fpw, char *fmt, ...) {
 	}
 }
 
-
-
-void masterInterrupt(int seconds) {
-	
+void masterInterrupt(int seconds) {	
 	timer(seconds);
 	struct sigaction sa1;
 	sigemptyset(&sa1.sa_mask);
@@ -467,10 +435,8 @@ void masterInterrupt(int seconds) {
 	signal(SIGUSR1, SIG_IGN);
 	signal(SIGSEGV, segHandler);
 }
+
 void masterHandler(int signum) {
-	if(!isDisplayTerminal) {
-		fprintf(stderr, "%8s(%d/%d)\n\n", "", fork_number, TOTAL_PROCESS);
-	}
 	finalize();
 
 	double mem_p_sec = (double)memoryaccess_number / (double)shmclock_shmptr->second;
@@ -478,15 +444,15 @@ void masterHandler(int signum) {
 	double avg_m = (double)total_access_time / (double)memoryaccess_number;
 	avg_m /= 1000000.0;
 
-	printWrite(fpw, "- Master PID: %d\n", getpid());
-	printWrite(fpw, "- Number of forking during this execution: %d\n", fork_number);
-	printWrite(fpw, "- Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
-	printWrite(fpw, "- Number of memory accesses: %d\n", memoryaccess_number);
-	printWrite(fpw, "- Number of memory accesses per nanosecond: %f memory/second\n", mem_p_sec);
-	printWrite(fpw, "- Number of page faults: %d\n", pagefault_number);
-	printWrite(fpw, "- Number of page faults per memory access: %f pagefault/access\n", pg_f_p_mem);
-	printWrite(fpw, "- Average memory access speed: %f ms/n\n", avg_m);
-	printWrite(fpw, "- Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);
+	printWrite(fpw, "Master PID: %d\n", getpid());
+	printWrite(fpw, "Number of forking during this execution: %d\n", fork_number);
+	printWrite(fpw, "Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
+	printWrite(fpw, "Number of memory accesses: %d\n", memoryaccess_number);
+	printWrite(fpw, "Number of memory accesses per nanosecond: %f memory/second\n", mem_p_sec);
+	printWrite(fpw, "Number of page faults: %d\n", pagefault_number);
+	printWrite(fpw, "Number of page faults per memory access: %f pagefault/access\n", pg_f_p_mem);
+	printWrite(fpw, "Average memory access speed: %f ms/n\n", avg_m);
+	printWrite(fpw, "Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);
 	fprintf(stderr, "SIMULATION RESULT is recorded into the log file: %s\n", log_file);
 
 	cleanUp();
@@ -522,8 +488,6 @@ void timer(int seconds) {
 	}
 }
 
-
-
 void finalize() {
 	fprintf(stderr, "\nLimitation has reached! Invoking termination...\n");
 	kill(0, SIGUSR1);
@@ -532,7 +496,6 @@ void finalize() {
 		p = waitpid(-1, NULL, WNOHANG);
 	}
 }
-
 
 void discardShm(int shmid, void *shmaddr, char *shm_name , char *exe_name, char *process_type) {
 	if(shmaddr != NULL) {
@@ -548,7 +511,6 @@ void discardShm(int shmid, void *shmaddr, char *shm_name , char *exe_name, char 
 	}
 }
 
-
 void cleanUp() {
 	if(mqueueid > 0) {
 		msgctl(mqueueid, IPC_RMID, NULL);
@@ -563,14 +525,12 @@ void cleanUp() {
 	discardShm(pcbt_shmid, pcbt_shmptr, "pcbt", exe_name, "Master");
 }
 
-
 void semaLock(int sem_index) {
 	sema_operation.sem_num = sem_index;
 	sema_operation.sem_op = -1;
 	sema_operation.sem_flg = 0;
 	semop(semid, &sema_operation, 1);
 }
-
 
 void semaRelease(int sem_index) {	
 	sema_operation.sem_num = sem_index;
@@ -595,7 +555,6 @@ int incShmclock(int increment) {
 	return nano;
 }
 
-
 void initPCBT(ProcessControlBlock *pcbt) {
 	int i, j;
 	for(i = 0; i < MAX_PROCESS; i++) {
@@ -609,7 +568,6 @@ void initPCBT(ProcessControlBlock *pcbt) {
 		}
 	}		
 }
-
 
 char *getPCBT(ProcessControlBlock *pcbt) {
 	int i;
@@ -626,7 +584,6 @@ char *getPCBT(ProcessControlBlock *pcbt) {
 	sprintf(buf, "%s\n", buf);
 	return strduplicate(buf);
 }
-
 
 void initPCB(ProcessControlBlock *pcb, int index, pid_t pid) {
 	int i;
