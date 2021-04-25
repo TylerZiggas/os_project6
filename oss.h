@@ -93,16 +93,7 @@ typedef struct
 	QNode *front;
 	QNode *rear;
 	int count;
-}Queue; 
-
-
-Queue *createQueue();
-QNode *newQNode(int index);
-void enQueue(Queue* q, int index);
-QNode *deQueue(Queue *q);
-bool isQueueEmpty(Queue *q);
-int getQueueCount(Queue *q);
-char *getQueue(const Queue *q);
+}Queue;
 
 //helper.h
 char *strduplicate(const char *src);
@@ -123,14 +114,21 @@ typedef struct
 }List;
 
 
+char *strduplicate(const char *);
 List *createList();
-LNode *newLNode(int index, int page, int frame);
-
-void addListElement(List *l, int index, int page, int frame);
-void deleteListFirst(List *l);
-int deleteListElement(List *l, int index, int page, int frame);
-bool isInList(List *l, int key);
-char *getList(const List *l);
+LNode *newLNode(int, int, int);
+void addListElement(List *, int, int, int);
+void deleteListFirst(List *);
+int deleteListElement(List *, int, int, int);
+bool isInList(List *, int);
+char *getList(const List *);
+Queue *createQueue();
+QNode *newQNode(int);
+void enQueue(Queue*, int);
+QNode *deQueue(Queue *);
+bool isQueueEmpty(Queue *);
+int getQueueCount(Queue *);
+char *getQueue(const Queue *);
 
 
 
