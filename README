@@ -1,0 +1,26 @@
+Author: Tyler Ziggas
+Date: May 2021
+
+Implemented Steps for this project: 
+
+1. Get a Makefile that compiles two source files, have oss allocate shared memory, use it, then deallocate it. Make sure
+to check all possible error returns. [Day 1]
+
+2. Get oss to fork and exec one child and have that child attach to shared memory and check the clock and verify it has
+correct resource limit. Then test having child and oss communicate through message queues or semaphore. Set up PCB
+and frame table/page tables. [Day 2]
+
+3. Have child request a read/write of a memory address and have oss always grant it and log it. [Day 3]
+
+4. Set up more than one process going through your system, still granting all requests. [Day 4]
+
+5. Now start filling out your page table and frame table; if a frame is full, just empty it (indicating in the process that you
+took it from is gone) and granting request. [Day 5-6]
+
+6. Implement a wait queue for I/O delay on needing to swap a page. [Day 7]
+
+7. Do not forget that swapping a page with a dirty bit should take more time on your device. [Day 8-9]
+
+8. Implement the second chance algorithm replacement policy. [Day 10-12]
+
+9. Add your observations into README. [Day 13]
