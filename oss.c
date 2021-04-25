@@ -10,7 +10,7 @@ Queue *queue;
 SharedClock forkclock;
 
 int mqueueid = -1, shmclock_shmid = -1, semid = -1, pcbt_shmid = -1;
-int fork_number = 0, memoryaccess_number = 0, pagefault_number = 0, last_frame = -1;
+int fork_number = 0, memoryaccess_number = 0, pagefault_number = 0, last_frame = -1, numOfProcesses = 20;
 Message master_message;
 SharedClock *shmclock_shmptr = NULL;
 struct sembuf sema_operation;
@@ -39,22 +39,49 @@ void initPCB(ProcessControlBlock *, int, pid_t);
 int main(int argc, char *argv[]) {
 	exe_name = argv[0];
 	srand(getpid());
-	int character, forkCounter = 0;
-	while((character = getopt(argc, argv, "hl:")) != -1) {
+	bool allDigit = true;
+	int character, optargCount, forkCounter = 0;
+	while((character = getopt(argc, argv, "hl:p:")) != -1) {
 		switch(character) {
 			case 'h':
 				printf("NAME:\t");
 				printf("	%s - simulate the memory management module and compare LRU and FIFO page replacement algorithms, both with dirty-bit optimization.\n", exe_name);
 				printf("\nUSAGE:\t");
 				printf("	%s [-h] [-l logfile] [-p processes].\n", exe_name);
-				printf("\nDESCRIPTION:\n");
 				printf("	-h           : print the help page and exit.\n");
 				printf("	-l filename  : the log file used (default is logfile).\n");
+				printf("	-p processes : number of processes (between 20 and 40)\n");
 				exit(EXIT_SUCCESS);
 			case 'l':
 				logfile = optarg;
 				fprintf(stderr, "Your new log file is: %s\n", logfile);
 				break;
+			case 'p':
+				allDigit = true;
+				for (optargCount = 0; optargCount < strlen(optarg); optargCount++) { // Check if entire optarg is digit
+					if (!isdigit(optarg[optargCount])) {
+						allDigit = false;
+						break;
+					}
+				}		
+				if (allDigit) { // After that, check if it meets requirements to change max
+					int testDigit = atoi(optarg);
+					if (20 <= testDigit) {
+						if (testDigit <= 40) {
+							numOfProcesses = atoi(optarg);
+						} else {
+							printf("Must be between the default of 20 and the maximum of 40\n");
+						}
+					} else {
+						printf("Must be between the default of 20 and the maximum of 40\n");
+					}
+				} else {
+					errno = 22;
+					perror("-s requires a valid argument");
+					printf("Please see the help menu for more information\n");
+					return EXIT_FAILURE;
+				}
+				continue;
 			default:
 				fprintf(stderr, "%s: please use \"-h\" option for more info.\n", exe_name);
 				exit(EXIT_FAILURE);
@@ -150,7 +177,7 @@ int main(int argc, char *argv[]) {
 				count_process++;
 			}
 
-			if(is_bitmap_open == true && forkCounter < 40) {
+			if(is_bitmap_open == true && forkCounter < numOfProcesses) {
 				forkCounter++;
 				pid = fork();
 				if(pid == -1) {
@@ -351,7 +378,7 @@ int main(int argc, char *argv[]) {
 			bitmap[return_index / 8] &= ~(1 << (return_index % 8));
 		}
 
-		if(fork_number >= TOTAL_PROCESS || forkCounter >= 40) {
+		if(fork_number >= TOTAL_PROCESS || forkCounter >= numOfProcesses) {
 			timer(0);
 			masterHandler(0);
 		}

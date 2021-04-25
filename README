@@ -1,6 +1,14 @@
 Author: Tyler Ziggas
 Date: May 2021
 
+The purpose of this project is to use FIFO algorithm to demonstrate swapping and paging, and simulating memory management.
+
+This project is invoked by the following commands:
+./oss (to run the project)
+-l (logfile) to rename the logfile
+-p (processes) to change the number of processes
+-h to see the help menu
+
 Implemented Steps for this project: 
 
 1. Get a Makefile that compiles two source files, have oss allocate shared memory, use it, then deallocate it. Make sure

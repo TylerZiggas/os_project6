@@ -10,7 +10,8 @@
 #include <unistd.h>   
 #include <stdarg.h>   
 #include <errno.h>      
-#include <signal.h>  
+#include <signal.h> 
+#include <ctype.h> 
 #include <sys/ipc.h> 
 #include <sys/msg.h>   
 #include <sys/shm.h>  
