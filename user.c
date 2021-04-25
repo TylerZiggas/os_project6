@@ -1,21 +1,20 @@
+// Author: Tyler Ziggas
+// Date: May 2021
+
 #include "oss.h"
 
-static char *exe_name;
-static int exe_index;
-static key_t key;
+char *exe_name;
+key_t key;
 
-static int mqueueid = -1;
-static Message user_message;
-static int shmclock_shmid = -1;
-static SharedClock *shmclock_shmptr = NULL;
-static int semid = -1;
-static int pcbt_shmid = -1;
-static ProcessControlBlock *pcbt_shmptr = NULL;
+int exe_index, mqueueid = -1, shmclock_shmid = -1, semid = -1, pcbt_shmid = -1;
+Message user_message;
+SharedClock *shmclock_shmptr = NULL;
+ProcessControlBlock *pcbt_shmptr = NULL;
 
 void processInterrupt();
-void processHandler(int signum);
-void resumeHandler(int signum);
-void discardShm(void *shmaddr, char *shm_name , char *exe_name, char *process_type);
+void processHandler(int);
+void resumeHandler(int);
+void discardShm(void *, char *, char *, char *);
 void cleanUp();
 void getSharedMemory();
 

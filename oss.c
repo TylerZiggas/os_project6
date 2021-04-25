@@ -1,30 +1,25 @@
+// Author: Tyler Ziggas
+// Date: May 2021
+
 #include "oss.h"
 
 char* logfile = "logfile";
-static char *exe_name;
-static key_t key;
-static Queue *queue;
-static SharedClock forkclock;
+char *exe_name;
+key_t key;
+Queue *queue;
+SharedClock forkclock;
 
-static int mqueueid = -1;
-static Message master_message;
-static int shmclock_shmid = -1;
-static SharedClock *shmclock_shmptr = NULL;
-static int semid = -1;
-static struct sembuf sema_operation;
-static int pcbt_shmid = -1;
-static ProcessControlBlock *pcbt_shmptr = NULL;
-
-static int fork_number = 0;
-static pid_t pid = -1;
-static unsigned char bitmap[MAX_PROCESS];
-
-static int memoryaccess_number = 0;
-static int pagefault_number = 0;
-static unsigned int total_access_time = 0;
-static unsigned char main_memory[MAX_FRAME];
-static int last_frame = -1;
-static List *reference_string;
+int mqueueid = -1, shmclock_shmid = -1, semid = -1, pcbt_shmid = -1;
+int fork_number = 0, memoryaccess_number = 0, pagefault_number = 0, last_frame = -1;
+Message master_message;
+SharedClock *shmclock_shmptr = NULL;
+struct sembuf sema_operation;
+ProcessControlBlock *pcbt_shmptr = NULL;
+pid_t pid = -1;
+unsigned int total_access_time = 0;
+unsigned char bitmap[MAX_PROCESS];
+unsigned char main_memory[MAX_FRAME];
+List *reference_string;
 
 void masterInterrupt(int);
 void masterHandler(int);

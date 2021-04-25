@@ -9,27 +9,22 @@ void createFile(char* path) { // Creation of file
 	fclose(newFile); // Close file at end regardless
 }
 
-int linesInFile = 0;
-
 void logOutput(char* path, char* fmt, ...) {
-	if (linesInFile < 100000) {
-		linesInFile++;
-		FILE* fp = fopen(path, "a+"); // Open a file for writing
-	
-		if (fp == NULL) { // In case of failed logging to file
-			perror("Failed to open file for logging output");
-			exit(EXIT_FAILURE);
-		}
-	
-		int n = 4096; 
-		char buf[n];
-		va_list args; // Intialize to grab all arguments for logging
-		va_start(args, fmt);
-		vsprintf(buf, fmt, args);
-		va_end(args);	
-		fprintf(fp, buf); // Writing to the file 
-		fclose(fp);
-	} 
+	FILE* fp = fopen(path, "a+"); // Open a file for writing
+
+	if (fp == NULL) { // In case of failed logging to file
+		perror("Failed to open file for logging output");
+		exit(EXIT_FAILURE);
+	}
+
+	int n = 4096; 
+	char buf[n];
+	va_list args; // Intialize to grab all arguments for logging
+	va_start(args, fmt);
+	vsprintf(buf, fmt, args);
+	va_end(args);	
+	fprintf(fp, buf); // Writing to the file 
+	fclose(fp);
 }
 
 char *strduplicate(const char *src) {
