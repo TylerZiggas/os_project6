@@ -32,3 +32,11 @@ took it from is gone) and granting request. [Day 5-6]
 8. Implement the second chance algorithm replacement policy. [Day 10-12]
 
 9. Add your observations into README. [Day 13]
+
+REPORT:
+The performance of the page replacement alogrithm starts to take exponentially longer the more processes are added.
+When we are at our default of 20 user processes we take an amount of simulated time of 140~ and about a real time of 2 seconds.
+When we are at 30 user processes we take an amount of simulated time of 150~ and about a real time of 3 seconds. 
+When we are at our maximum of 40 user processes we take an amount of simulated time of 280~ and about a real time of 6 seconds.
+So as we start putting more user processes into the algorithm, we start to see how it takes more and more time.
+Based on our simulation for other aspects though, it is more random what can happen in regards to other times as they are randomized. 
