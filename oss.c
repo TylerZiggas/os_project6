@@ -1,5 +1,7 @@
 // Author: Tyler Ziggas
 // Date: May 2021
+// The purpose of this project is to simulate memory management using the FIFO algorithm
+// There are 3 parmeters you can use, -h for help, -l to change the logfile name, and -p to change the number of processes
 
 #include "oss.h"
 
@@ -33,7 +35,6 @@ void semaLock(int);
 void semaRelease(int);
 int incShmclock(int);
 void initPCBT(ProcessControlBlock *);
-char *getPCBT(ProcessControlBlock *);
 void initPCB(ProcessControlBlock *, int, pid_t);
 
 int main(int argc, char *argv[]) {
@@ -378,7 +379,7 @@ int main(int argc, char *argv[]) {
 			bitmap[return_index / 8] &= ~(1 << (return_index % 8));
 		}
 
-		if(fork_number >= TOTAL_PROCESS || forkCounter >= numOfProcesses) {
+		if(forkCounter >= numOfProcesses) {
 			timer(0);
 			masterHandler(0);
 		}
@@ -413,7 +414,7 @@ void masterHandler(int signum) {
 	double avg_m = (double)total_access_time / (double)memoryaccess_number;
 	avg_m /= 1000000.0;
 
-	printf("Master PID: %d\n", getpid());
+	printf("OSS PID: %d\n", getpid());
       	printf("Number of forking during this execution: %d\n", fork_number);
         printf("Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
         printf("Number of memory accesses: %d\n", memoryaccess_number);
@@ -421,14 +422,14 @@ void masterHandler(int signum) {
         printf("Average memory access speed: %f ms/n\n", avg_m);
         printf("Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);	
 
-	logOutput(logfile, "Master PID: %d\n", getpid());
+	logOutput(logfile, "OSS PID: %d\n", getpid());
 	logOutput(logfile, "Number of forking during this execution: %d\n", fork_number);
 	logOutput(logfile, "Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 	logOutput(logfile, "Number of memory accesses: %d\n", memoryaccess_number);
 	logOutput(logfile, "Number of page faults: %d\n", pagefault_number);
 	logOutput(logfile, "Average memory access speed: %f ms/n\n", avg_m);
 	logOutput(logfile, "Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);
-	printf("SIMULATION RESULT is recorded into the log file: %s\n", logfile);
+	printf("More information can be found in our log file named: %s\n", logfile);
 
 	cleanUp();
 	exit(EXIT_SUCCESS); 
@@ -536,22 +537,6 @@ void initPCBT(ProcessControlBlock *pcbt) {
 			pcbt[i].page_table[j].valid = 0;
 		}
 	}		
-}
-
-char *getPCBT(ProcessControlBlock *pcbt) {
-	int i;
-	char buf[4096];
-
-	sprintf(buf, "PCBT: ");
-	for(i = 0; i < MAX_PROCESS; i++) {
-		sprintf(buf, "%s(%d| %d)", buf, pcbt[i].pidIndex, pcbt[i].actualPid);
-		
-		if(i < MAX_PROCESS - 1) {
-			sprintf(buf, "%s, ", buf);
-		}
-	}
-	sprintf(buf, "%s\n", buf);
-	return strduplicate(buf);
 }
 
 void initPCB(ProcessControlBlock *pcb, int index, pid_t pid) {

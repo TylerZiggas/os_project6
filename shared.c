@@ -27,82 +27,69 @@ void logOutput(char* path, char* fmt, ...) {
 	fclose(fp);
 }
 
-char *strduplicate(const char *src) {
-	size_t len = strlen(src) + 1;  
-	char *dst = malloc(len);         
-	if (dst == NULL) return NULL;   
-	memcpy (dst, src, len);          
-	return dst;            
-}
-
-List *createList() {
+List *createList() { // Creation of our list
 	List *l = (List *)malloc(sizeof(List));
 	l->front = NULL;
 	return l;
 }
 
-
-LNode *newLNode(int index, int page, int frame) { 
-    LNode *temp = (LNode *)malloc(sizeof(LNode));
+LNode *newLNode(int index, int page, int frame) { // Adding a new node
+    LNode *temp = (LNode *)malloc(sizeof(LNode)); // allocate for it
     temp->index = index;
 	temp->page = page;
 	temp->frame = frame;
-    temp->next = NULL;
+    temp->next = NULL; // next does not exist yet
     return temp;
 }
 
-
-void addListElement(List *l, int index, int page, int frame) {
+void addListElement(List *l, int index, int page, int frame) { // adding an element to it
 	LNode *temp = newLNode(index, page, frame);
 
-	if(l->front == NULL) {
+	if(l->front == NULL) { // Check if the front is null
 		l->front = temp;
 		return;
 	}
 	
 	LNode *next = l->front;
-	while(next->next != NULL) {
+	while(next->next != NULL) { // Check if the next one is null
 		next = next->next;
 	}
 	next->next = temp;
 }
 
-
-
-void deleteListFirst(List *l) {
+void deleteListFirst(List *l) { // Check front of the list
     	if(l->front == NULL) {
         	return;
     	}
     
     	LNode *temp = l->front;
     	l->front = l->front->next;
-    	free(temp);
+    	free(temp); // Free it up once done
 }
 
-
-int deleteListElement(List *l, int index, int page, int frame) {
+int deleteListElement(List *l, int index, int page, int frame) { // Delete an element
 	LNode *current = l->front;
     	LNode *previous = NULL;
     
-    	if(current == NULL) {
+    	if(current == NULL) { // If there is nothing in the list like that, return -1
         	return -1;
     	}
     
 	while(current->index != index || current->page != page || current->frame != frame) {
-		if(current->next == NULL) {
+		if(current->next == NULL) { // If nothing next, return -1
           		return -1;
-        	} else {
+        	} else { // Move list if we are good
             		previous = current;
             		current = current->next;
         	}
     	}
     
-	if(current == l->front) {
+	if(current == l->front) { // If we are looking at the front of the list
 		int x = current->frame;
 		free(current);
         	l->front = l->front->next;
 		return x;
-    	} else {
+    	} else { // If we are not looking at the front
 		int x = previous->next->frame;
 		free(previous->next);
         	previous->next = current->next;
@@ -110,16 +97,15 @@ int deleteListElement(List *l, int index, int page, int frame) {
     }
 }
 
-
-bool isInList(List *l, int key) {
+bool isInList(List *l, int key) { // Make sure it is in the list or not
     	LNode next;
     	next.next = l->front;
 
-    	if(next.next == NULL) {
-        	return false;
+    	if(next.next == NULL) { // If there is nothing  
+        	return false; 
     	}
 
-    	while(next.next->frame != key) {
+    	while(next.next->frame != key) { // Checking whether or not they match up
         	if(next.next->next == NULL) {
             		return false;
         	} else {
@@ -129,62 +115,36 @@ bool isInList(List *l, int key) {
     return true;
 }
 
-char *getList(const List *l) {
-	char buf[4096];
-    	LNode next;
-    	next.next = l->front;
-    
-    	if(next.next == NULL) {
-        	return strduplicate(buf);
-    	}
-    
-	sprintf(buf, "Linked List: ");
-    	while(next.next != NULL) {
-        	sprintf(buf, "%s(%d | %d| %d)", buf, next.next->index, next.next->page, next.next->frame);
-        
-        	next.next = (next.next->next != NULL) ? next.next->next : NULL;
-			if(next.next != NULL) {
-				sprintf(buf, "%s, ", buf);
-			}
-    	}
-	sprintf(buf, "%s\n", buf);
-	return strduplicate(buf);
-}
-
-//queue.c
-
-Queue *createQueue() {
-	Queue *q = (Queue *)malloc(sizeof(Queue));
+// Queue Block // 
+Queue *createQueue() { // Initial creation of our queue
+	Queue *q = (Queue *)malloc(sizeof(Queue)); // Allocate for it
 	q->front = NULL;
 	q->rear = NULL;
-	q->count = 0;
+	q->count = 0; // initial count is 0 as we just intialized it
 	return q;
 }
 
-
-QNode *newQNode(int index) { 
-    	QNode *temp = (QNode *)malloc(sizeof(QNode));
+QNode *newQNode(int index) { // Adding another node
+    	QNode *temp = (QNode *)malloc(sizeof(QNode)); // Allocation of the node
     	temp->index = index;
     	temp->next = NULL;
     	return temp;
 } 
 
-
-void enQueue(Queue *q, int index) { 
+void enQueue(Queue *q, int index) { // Queue another 
 	QNode *temp = newQNode(index);
 	q->count = q->count + 1;
-	if(q->rear == NULL) {
+	if(q->rear == NULL) { // Check to see if the queue is empty
 		q->front = q->rear = temp;
 		return;
 	}
 
-	q->rear->next = temp;
+	q->rear->next = temp; // Otherwise add to next
 	q->rear = temp;
 }
 
-
-QNode *deQueue(Queue *q) {
-	if(q->front == NULL) {
+QNode *deQueue(Queue *q) { // Removing from the queue
+	if(q->front == NULL) { // Check if there is nothing on the front 
 		return NULL;
 	}
 
@@ -192,42 +152,20 @@ QNode *deQueue(Queue *q) {
 	free(temp);
 	q->front = q->front->next;
 
-	if(q->front == NULL) {
+	if(q->front == NULL) { 
 		q->rear = NULL;
 	}
 
-	q->count = q->count - 1;
+	q->count = q->count - 1; // Remove 1 from queue
 	return temp;
 } 
 
-bool isQueueEmpty(Queue *q) {
-	if(q->rear == NULL) {
+bool isQueueEmpty(Queue *q) { // Checker to see if the queue is empty
+	if(q->rear == NULL) { // Simple check to see if it null
 		return true;
 	} else {
 		return false;
 	}
 }
 
-
-int getQueueCount(Queue *q) {
-	return (q->count);	
-}
-
-
-char *getQueue(const Queue *q) {
-	char buf[4096];
-	QNode next;
-	next.next = q->front;
-
-	sprintf(buf, "Queue: ");
-	while(next.next != NULL) {
-		sprintf(buf, "%s%d", buf, next.next->index);
-		
-		next.next = (next.next->next != NULL) ? next.next->next : NULL;
-		if(next.next != NULL) {
-			sprintf(buf, "%s, ", buf);
-		}
-	}
-	sprintf(buf, "%s\n", buf);
-	return strduplicate(buf);
-}
+// Queue Block //

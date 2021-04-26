@@ -6,54 +6,48 @@
 char *exe_name;
 key_t key;
 
-int exe_index, mqueueid = -1, shmclock_shmid = -1, semid = -1, pcbt_shmid = -1;
+int exeIndex, mqueueid = -1;
 Message user_message;
-SharedClock *shmclock_shmptr = NULL;
-ProcessControlBlock *pcbt_shmptr = NULL;
 
 void processInterrupt();
 void processHandler(int);
 void resumeHandler(int);
-void discardShm(void *, char *, char *, char *);
-void cleanUp();
-void getSharedMemory();
+void getMessageQueue();
 
 int main(int argc, char *argv[]) {
 	processInterrupt();
 	exe_name = argv[0];
-	exe_index = atoi(argv[1]);
+	exeIndex = atoi(argv[1]);
 	srand(getpid());
-	getSharedMemory();
+	getMessageQueue();
 
-	bool is_terminate = false;
-	int memory_reference = 0;
+	bool toTerminate = false;
+	int memoryRef = 0;
 	unsigned int address = 0;
-	unsigned int request_page = 0;
+	unsigned int pageReq = 0;
 	while(1) {
 		msgrcv(mqueueid, &user_message, (sizeof(Message) - sizeof(long)), getpid(), 0);
 
-		if(memory_reference <= 1000) {
-
+		if(memoryRef <= 1000) {
 			address = rand() % 32768 + 0;
-			request_page = address >> 10;
-			memory_reference++;
+			pageReq = address >> 10;
+			memoryRef++;
 		} else {
-			is_terminate = true;
+			toTerminate = true;
 		}
 		
 		user_message.mtype = 1;
-		user_message.flag = (is_terminate) ? 0 : 1;
+		user_message.flag = (toTerminate) ? 0 : 1;
 		user_message.address = address;
-		user_message.requestPage = request_page;
+		user_message.requestPage = pageReq;
 		msgsnd(mqueueid, &user_message, (sizeof(Message) - sizeof(long)), 0);
 	
-		if(is_terminate) {
+		if(toTerminate) {
 			break;
 		}
 	}
 
-	cleanUp();
-	exit(exe_index);
+	exit(exeIndex);
 }
 
 
@@ -76,70 +70,14 @@ void processInterrupt() {
 }
 
 void processHandler(int signum) {
-	cleanUp();
 	exit(2);
 }
 
-void discardShm(void *shmaddr, char *shm_name , char *exe_name, char *process_type) {
-	if(shmaddr != NULL) {
-		if((shmdt(shmaddr)) << 0) {
-			fprintf(stderr, "%s (%s) ERROR: could not detach [%s] shared memory!\n", exe_name, process_type, shm_name);
-		}
-	}
-}
-
-void getSharedMemory() {
+void getMessageQueue() {
 	key = ftok("./oss.c", 1);
 	mqueueid = msgget(key, 0600);
 	if(mqueueid < 0) {
 		fprintf(stderr, "%s ERROR: could not get [message queue] shared memory! Exiting...\n", exe_name);
-		cleanUp();
 		exit(EXIT_FAILURE);
-	}
-
-	key = ftok("./oss.c", 2);
-	shmclock_shmid = shmget(key, sizeof(SharedClock), 0600);
-	if(shmclock_shmid < 0) {
-		fprintf(stderr, "%s ERROR: could not get [shmclock] shared memory! Exiting...\n", exe_name);
-		cleanUp();
-		exit(EXIT_FAILURE);
-	}
-
-
-	shmclock_shmptr = shmat(shmclock_shmid, NULL, 0);
-	if(shmclock_shmptr == (void *)( -1 )) {
-		fprintf(stderr, "%s ERROR: fail to attach [shmclock] shared memory! Exiting...\n", exe_name);
-		cleanUp();
-		exit(EXIT_FAILURE);	
-	}
-
-	key = ftok("./oss.c", 3);
-	semid = semget(key, 1, 0600);
-	if(semid == -1) {
-		fprintf(stderr, "%s ERROR: fail to attach a private semaphore! Exiting...\n", exe_name);
-		cleanUp();
-		exit(EXIT_FAILURE);
-	}
-
-	key = ftok("./oss.c", 4);
-	size_t process_table_size = sizeof(ProcessControlBlock) * MAX_PROCESS;
-	pcbt_shmid = shmget(key, process_table_size, 0600);
-	if(pcbt_shmid < 0) {
-		fprintf(stderr, "%s ERROR: could not get [pcbt] shared memory! Exiting...\n", exe_name);
-		cleanUp();
-		exit(EXIT_FAILURE);
-	}
-
-	pcbt_shmptr = shmat(pcbt_shmid, NULL, 0);
-	if(pcbt_shmptr == (void *)( -1 )) {
-		fprintf(stderr, "%s ERROR: fail to attach [pcbt] shared memory! Exiting...\n", exe_name);
-		cleanUp();
-		exit(EXIT_FAILURE);	
 	}
 }
-
-void cleanUp() {
-        discardShm(shmclock_shmptr, "shmclock", exe_name, "Child");
-        discardShm(pcbt_shmptr, "pcbt", exe_name, "Child");
-}
-
