@@ -450,7 +450,7 @@ void timer(int seconds) { // Setting up of our timer
 }
 
 void finalize() { // Finalize and fully kill our processes
-	fprintf(stderr, "\nLimitation has reached! Invoking termination...\n");
+	fprintf(stderr, "\nTerminating...\n");
 	kill(0, SIGUSR1); // Kill the process
 	pid_t p = 0;
 	while(p >= 0) {
