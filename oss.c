@@ -10,16 +10,16 @@ key_t key;
 Queue *queue;
 SharedClock forkclock;
 int mqueueid = -1, shmclock_shmid = -1, semid = -1, pcbt_shmid = -1; // ID declarations
-int fork_number = 0, memoryaccess_number = 0, pagefault_number = 0, last_frame = -1, numOfProcesses = 20; // Global varaibles
-Message master_message; // Shared declarations
+int forkNumber = 0, memAccess = 0, pagefaultNumber = 0, lastFrame = -1, numOfProcesses = 20; // Global varaibles
+Message message; // Shared declarations
 SharedClock *shmclock_shmptr = NULL;
 struct sembuf sema_operation;
 ProcessControlBlock *pcbt_shmptr = NULL;
 pid_t pid = -1;
-unsigned int total_access_time = 0;
+unsigned int totalAccess = 0;
 unsigned char bitmap[MAX_PROCESS];
-unsigned char main_memory[MAX_FRAME];
-List *reference_string;
+unsigned char mainMemory[MAX_FRAME];
+List *refString;
 
 void masterInterrupt(int); // Declarations for our handlers and timers
 void masterHandler(int);
@@ -124,8 +124,8 @@ int main(int argc, char *argv[]) {
 	
 	semctl(semid, 0, SETVAL, 1);
 	key = ftok("./oss.c", 4); // Creation of our process table
-	size_t process_table_size = sizeof(ProcessControlBlock) * MAX_PROCESS;
-	pcbt_shmid = shmget(key, process_table_size, IPC_CREAT | 0600);
+	size_t processTableSize = sizeof(ProcessControlBlock) * MAX_PROCESS;
+	pcbt_shmid = shmget(key, processTableSize, IPC_CREAT | 0600);
 	if(pcbt_shmid < 0) { // Allocate our process control block
 		fprintf(stderr, "ERROR: could not allocate\n");
 		cleanUp();
@@ -141,35 +141,34 @@ int main(int argc, char *argv[]) {
 
 	initPCBT(pcbt_shmptr); // Set it up
 	queue = createQueue(); // Create our queue
-	reference_string = createList(); // Create our list
+	refString = createList(); // Create our list
 	masterInterrupt(TERMINATION_TIME); // Set up our interrupts
 
-	printf("\nSimulating...\n"); // Start our simulation
-	printf("Using First In First Out (FIFO) algorithm.\n");
+	printf("\nSimulating FIFO Page Replacement Algorithm...\n"); // Start our simulation
 
-	int last_index = -1;
+	int lastIndex = -1;
 	while(1) { // Infinite loop for our process and algorithm
 		int spawn_nano = rand() % 500000000 + 1000000;
 		if(forkclock.nanosecond >= spawn_nano) { 
 			forkclock.nanosecond = 0;
 
-			bool is_bitmap_open = false;
-			int count_process = 0;
+			bool isBitmapOpen = false;
+			int countProcess = 0;
 			while(1) { // Infinite loop for bitmap
-				last_index = (last_index + 1) % MAX_PROCESS;
-				uint32_t bit = bitmap[last_index / 8] & (1 << (last_index % 8));
+				lastIndex = (lastIndex + 1) % MAX_PROCESS;
+				uint32_t bit = bitmap[lastIndex / 8] & (1 << (lastIndex % 8));
 				if(bit == 0) { // Open the bitmap
-					is_bitmap_open = true;
+					isBitmapOpen = true;
 					break;
 				}
 
-				if(count_process >= MAX_PROCESS - 1) { // Make sure number of processes isn't too high
+				if(countProcess >= MAX_PROCESS - 1) { // Make sure number of processes isn't too high
 					break;
 				}
-				count_process++;
+				countProcess++;
 			}
 
-			if(is_bitmap_open == true && forkCounter < numOfProcesses) { // Make sure bitmap is open and we havent hit the max processes
+			if(isBitmapOpen == true && forkCounter < numOfProcesses) { // Make sure bitmap is open and we havent hit the max processes
 				forkCounter++; // Add to our counter
 				pid = fork();
 				if(pid == -1) { //Display an error if the process wasn't spawned correctly, then get out
@@ -181,25 +180,25 @@ int main(int argc, char *argv[]) {
 		
 				if(pid == 0) { // Child processes
 					signal(SIGUSR1, exitHandler);
-					char exec_index[BUFFER_LENGTH];
-					sprintf(exec_index, "%d", last_index);
-					int exect_status = execl("./get_page", "./get_page", exec_index, NULL); // Exec the process to our page getter
-					if(exect_status == -1) { // Make sure we didnt fail to exec
-						fprintf(stderr, "(Child) ERROR: execl fail to execute at index [%d]! Exiting...\n", last_index);
+					char execIndex[BUFFER_LENGTH];
+					sprintf(execIndex, "%d", lastIndex);
+					int exectStatus = execl("./get_page", "./get_page", execIndex, NULL); // Exec the process to our page getter
+					if(exectStatus == -1) { // Make sure we didnt fail to exec
+						fprintf(stderr, "(Child) ERROR: execl fail to execute at index [%d]! Exiting...\n", lastIndex);
 					}
 				
 					finalize(); // Clean up and exit
 					cleanUp();
 					exit(EXIT_FAILURE);
 				} else { // Master process
-					fork_number++; // Update the number forked
-					bitmap[last_index / 8] |= (1 << (last_index % 8)); 
-					initPCB(&pcbt_shmptr[last_index], last_index, pid); // Intialize the process control block
-					enQueue(queue, last_index); // Queue it up
+					forkNumber++; // Update the number forked
+					bitmap[lastIndex / 8] |= (1 << (lastIndex % 8)); 
+					initPCB(&pcbt_shmptr[lastIndex], lastIndex, pid); // Intialize the process control block
+					enQueue(queue, lastIndex); // Queue it up
 
 					// Display that the process is being generated
 					logOutput(logfile, "Generating process with PID (%d) [%d] and putting it in queue at time %d.%d\n", 
-						pcbt_shmptr[last_index].pidIndex, pcbt_shmptr[last_index].actualPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
+						pcbt_shmptr[lastIndex].pidIndex, pcbt_shmptr[lastIndex].actualPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 				}
 			}
 		}
@@ -211,142 +210,142 @@ int main(int argc, char *argv[]) {
 		while(qnext.next != NULL) { // Check if another is left in the queue
 			incShmclock(0); // Update our clock
 
-			int c_index = qnext.next->index;
-			master_message.mtype = pcbt_shmptr[c_index].actualPid; // Put message queue information in
-			master_message.index = c_index;
-			master_message.childPid = pcbt_shmptr[c_index].actualPid;
-			msgsnd(mqueueid, &master_message, (sizeof(Message) - sizeof(long)), 0); // Send our message queue
-			msgrcv(mqueueid, &master_message, (sizeof(Message) - sizeof(long)), 1, 0);
+			int cindex = qnext.next->index;
+			message.mtype = pcbt_shmptr[cindex].actualPid; // Put message queue information in
+			message.index = cindex;
+			message.childPid = pcbt_shmptr[cindex].actualPid;
+			msgsnd(mqueueid, &message, (sizeof(Message) - sizeof(long)), 0); // Send our message queue
+			msgrcv(mqueueid, &message, (sizeof(Message) - sizeof(long)), 1, 0);
 			incShmclock(0); // Update our clock
 
-			if(master_message.flag == 0) { // Display if process is finished running
+			if(message.flag == 0) { // Display if process is finished running
 				logOutput(logfile, "Process with PID (%d) [%d] has finish running at my time %d.%d\n",
-					master_message.index, master_message.childPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
+					message.index, message.childPid, shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 
 				int i;
 				for(i = 0; i < MAX_PAGE; i++) { // Fix our list element 
-					if(pcbt_shmptr[c_index].page_table[i].frameNo != -1) {
-						int frame = pcbt_shmptr[c_index].page_table[i].frameNo;
-						deleteListElement(reference_string, c_index, i, frame);
-						main_memory[frame / 8] &= ~(1 << (frame % 8));
+					if(pcbt_shmptr[cindex].page_table[i].frameNo != -1) {
+						int frame = pcbt_shmptr[cindex].page_table[i].frameNo;
+						deleteListElement(refString, cindex, i, frame);
+						mainMemory[frame / 8] &= ~(1 << (frame % 8));
 					}
 				}
 			} else { // If we are not finished processing
-				total_access_time += incShmclock(0); // Add to our total time
-				enQueue(trackingQueue, c_index); // Queue this up
+				totalAccess += incShmclock(0); // Add to our total time
+				enQueue(trackingQueue, cindex); // Queue this up
 	
-				unsigned int address = master_message.address;
-				unsigned int request_page = master_message.requestPage;
-				if(pcbt_shmptr[c_index].page_table[request_page].protection == 0) { // Log our process read request
+				unsigned int address = message.address;
+				unsigned int requestPage = message.requestPage;
+				if(pcbt_shmptr[cindex].page_table[requestPage].protection == 0) { // Log our process read request
  					logOutput(logfile, "Process (%d) [%d] requesting read of address (%d) [%d] at time %d:%d\n", 
-						master_message.index, master_message.childPid, 
-						address, request_page,
+						message.index, message.childPid, 
+						address, requestPage,
 						shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 				} else { // Log our process write request
 					logOutput(logfile, "Process (%d) [%d] requesting write of address (%d) [%d] at time %d:%d\n", 
-						master_message.index, master_message.childPid, 
-						address, request_page,
+						message.index, message.childPid, 
+						address, requestPage,
 						shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 				}
-				memoryaccess_number++; // Increment our memory access
+				memAccess++; // Increment our memory access
 
-				if(pcbt_shmptr[c_index].page_table[request_page].valid == 0) { // In case of a page fault
+				if(pcbt_shmptr[cindex].page_table[requestPage].valid == 0) { // In case of a page fault
  					logOutput(logfile, "Address (%d) [%d] is not in a frame, pagefault\n",
-						address, request_page);
+						address, requestPage);
 					
-					pagefault_number++; // Add to our overall page faults
-					total_access_time += incShmclock(14000000); // Add to our simulated time
-					bool is_memory_open = false;
-					int count_frame = 0;
+					pagefaultNumber++; // Add to our overall page faults
+					totalAccess += incShmclock(14000000); // Add to our simulated time
+					bool isMemoryOpen = false;
+					int countFrame = 0;
 					while(1) { // Loop to see if the memory is open
-						last_frame = (last_frame + 1) % MAX_FRAME;
-						uint32_t frame = main_memory[last_frame / 8] & (1 << (last_frame % 8));
+						lastFrame = (lastFrame + 1) % MAX_FRAME;
+						uint32_t frame = mainMemory[lastFrame / 8] & (1 << (lastFrame % 8));
 						if(frame == 0) { // Check if memory is open
-							is_memory_open = true;
+							isMemoryOpen = true;
 							break;
 						}
 
-						if(count_frame >= MAX_FRAME - 1) {
+						if(countFrame >= MAX_FRAME - 1) {
 							break;
 						}
-						count_frame++;
+						countFrame++;
 					}
 
-					if(is_memory_open == true) { // We are good to go
-						pcbt_shmptr[c_index].page_table[request_page].frameNo = last_frame;
-						pcbt_shmptr[c_index].page_table[request_page].valid = 1;
-						main_memory[last_frame / 8] |= (1 << (last_frame % 8));
-						addListElement(reference_string, c_index, request_page, last_frame);
+					if(isMemoryOpen == true) { // We are good to go
+						pcbt_shmptr[cindex].page_table[requestPage].frameNo = lastFrame;
+						pcbt_shmptr[cindex].page_table[requestPage].valid = 1;
+						mainMemory[lastFrame / 8] |= (1 << (lastFrame % 8));
+						addListElement(refString, cindex, requestPage, lastFrame);
 						logOutput(logfile, "Allocated frame [%d] to PID (%d) [%d]\n",
-							last_frame, master_message.index, master_message.childPid); // Allocating our frame
+							lastFrame, message.index, message.childPid); // Allocating our frame
 
-						if(pcbt_shmptr[c_index].page_table[request_page].protection == 0) { // Giving the data
+						if(pcbt_shmptr[cindex].page_table[requestPage].protection == 0) { // Giving the data
 							logOutput(logfile, "Address (%d) [%d] in frame (%d), giving data to process (%d) [%d] at time %d:%d\n",
-								address, request_page, 
-								pcbt_shmptr[c_index].page_table[request_page].frameNo,
-								master_message.index, master_message.childPid,
+								address, requestPage, 
+								pcbt_shmptr[cindex].page_table[requestPage].frameNo,
+								message.index, message.childPid,
 								shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 
-							pcbt_shmptr[c_index].page_table[request_page].dirty = 0;
+							pcbt_shmptr[cindex].page_table[requestPage].dirty = 0;
 						} else { // If we are instead writing to frame
 							logOutput(logfile, "Address (%d) [%d] in frame (%d), writing data to frame at time %d:%d\n",
-								address, request_page, 
-								pcbt_shmptr[c_index].page_table[request_page].frameNo,
+								address, requestPage, 
+								pcbt_shmptr[cindex].page_table[requestPage].frameNo,
 								shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 
-							pcbt_shmptr[c_index].page_table[request_page].dirty = 1;
+							pcbt_shmptr[cindex].page_table[requestPage].dirty = 1;
 						}
 					} else { // In case the memory is currently full
- 						logOutput(logfile, "Address (%d) [%d] is not in a frame, memory is full. Invoking page replacement...\n", address, request_page);
+ 						logOutput(logfile, "Address (%d) [%d] is not in a frame, memory is full. Invoking page replacement...\n", address, requestPage);
 
-						unsigned int fifo_index = reference_string->front->index;
-						unsigned int fifo_page = reference_string->front->page;
-						unsigned int fifo_address = fifo_page << 10;
-						unsigned int fifo_frame = reference_string->front->frame;
-						if(pcbt_shmptr[fifo_index].page_table[fifo_page].dirty == 1) { // In case we have to change the address
+						unsigned int fifoIndex = refString->front->index;
+						unsigned int fifoPage = refString->front->page;
+						unsigned int fifoAddress = fifoPage << 10;
+						unsigned int fifoFrame = refString->front->frame;
+						if(pcbt_shmptr[fifoIndex].page_table[fifoPage].dirty == 1) { // In case we have to change the address
 							logOutput(logfile, "Address (%d) [%d] was modified. Modified information is written back to the disk\n", 
-										fifo_address, fifo_page);
+										fifoAddress, fifoPage);
 						}
 
-						pcbt_shmptr[fifo_index].page_table[fifo_page].frameNo = -1; // Update our indexs and pcbt information
-						pcbt_shmptr[fifo_index].page_table[fifo_page].dirty = 0;
-						pcbt_shmptr[fifo_index].page_table[fifo_page].valid = 0;
-						pcbt_shmptr[c_index].page_table[request_page].frameNo = fifo_frame;
-						pcbt_shmptr[c_index].page_table[request_page].dirty = 0;
-						pcbt_shmptr[c_index].page_table[request_page].valid = 1;
+						pcbt_shmptr[fifoIndex].page_table[fifoPage].frameNo = -1; // Update our indexs and pcbt information
+						pcbt_shmptr[fifoIndex].page_table[fifoPage].dirty = 0;
+						pcbt_shmptr[fifoIndex].page_table[fifoPage].valid = 0;
+						pcbt_shmptr[cindex].page_table[requestPage].frameNo = fifoFrame;
+						pcbt_shmptr[cindex].page_table[requestPage].dirty = 0;
+						pcbt_shmptr[cindex].page_table[requestPage].valid = 1;
 							
-						deleteListFirst(reference_string); // Get rid first on list and add a new element
-						addListElement(reference_string, c_index, request_page, fifo_frame);
+						deleteListFirst(refString); // Get rid first on list and add a new element
+						addListElement(refString, cindex, requestPage, fifoFrame);
 
-						if(pcbt_shmptr[c_index].page_table[request_page].protection == 1) { // Check for the dirty bit
-							logOutput(logfile, "Dirty bit of frame (%d) set, adding additional time to the clock\n", last_frame);
+						if(pcbt_shmptr[cindex].page_table[requestPage].protection == 1) { // Check for the dirty bit
+							logOutput(logfile, "Dirty bit of frame (%d) set, adding additional time to the clock\n", lastFrame);
 							logOutput(logfile, "Indicating to process (%d) [%d] that write has happend to address (%d) [%d]\n", 
-								master_message.index, master_message.childPid, address, request_page);
-							pcbt_shmptr[c_index].page_table[request_page].dirty = 1;
+								message.index, message.childPid, address, requestPage);
+							pcbt_shmptr[cindex].page_table[requestPage].dirty = 1;
 						}
 					}
 				} else { 
-					if(pcbt_shmptr[c_index].page_table[request_page].protection == 0) { // If the frame is already in use for the address
+					if(pcbt_shmptr[cindex].page_table[requestPage].protection == 0) { // If the frame is already in use for the address
 						logOutput(logfile, "Address (%d) [%d] is already in frame (%d), giving data to process (%d) [%d] at time %d:%d\n",
-							address, request_page, 
-							pcbt_shmptr[c_index].page_table[request_page].frameNo,
-							master_message.index, master_message.childPid,
+							address, requestPage, 
+							pcbt_shmptr[cindex].page_table[requestPage].frameNo,
+							message.index, message.childPid,
 							shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 					} else { // In case the address is in a frame
 						logOutput(logfile, "Address (%d) [%d] is already in frame (%d), writing data to frame at time %d:%d\n",
-							address, request_page, 
-							pcbt_shmptr[c_index].page_table[request_page].frameNo,
+							address, requestPage, 
+							pcbt_shmptr[cindex].page_table[requestPage].frameNo,
 							shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 					}
 				}
 			}
 
 			qnext.next = (qnext.next->next != NULL) ? qnext.next->next : NULL; // Setting up our next message queue
-			master_message.mtype = -1;
-			master_message.index = -1;
-			master_message.childPid = -1;
-			master_message.flag = -1;
-			master_message.requestPage = -1;
+			message.mtype = -1;
+			message.index = -1;
+			message.childPid = -1;
+			message.flag = -1;
+			message.requestPage = -1;
 		}
 
 		while(!isQueueEmpty(queue)) { // Empty the queue
@@ -401,26 +400,26 @@ void masterInterrupt(int seconds) { // Set up our timers
 
 void masterHandler(int signum) {
 	finalize(); // Finalize our process
-	double memPerSecond = (double)memoryaccess_number / (double)shmclock_shmptr->second; // Calculate the results we need
-	double pagefaultPerAccess = (double)pagefault_number / (double)memoryaccess_number;
-	double avgMem = (double)total_access_time / (double)memoryaccess_number;
+	double memPerSecond = (double)memAccess / (double)shmclock_shmptr->second; // Calculate the results we need
+	double pagefaultPerAccess = (double)pagefaultNumber / (double)memAccess;
+	double avgMem = (double)totalAccess / (double)memAccess;
 	avgMem /= 1000000.0;
 
 	printf("OSS PID: %d\n", getpid()); // Printing our results for the user
-      	printf("Number of forking during this execution: %d\n", fork_number);
+      	printf("Number of forking during this execution: %d\n", forkNumber);
         printf("Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
         printf("Number of memory accesses per nanosecond: %f memory/second\n", memPerSecond);
 	printf("Number of page faults per memory access: %f pagefault/access\n", pagefaultPerAccess);
         printf("Average memory access speed: %f ms/n\n", avgMem);
-        printf("Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);	
+        printf("Total memory access time: %f ms\n", (double)totalAccess / 1000000.0);	
 
 	logOutput(logfile, "OSS PID: %d\n", getpid()); // Logging our results for the user after the process is done
-	logOutput(logfile, "Number of forking during this execution: %d\n", fork_number);
+	logOutput(logfile, "Number of forking during this execution: %d\n", forkNumber);
 	logOutput(logfile, "Final simulation time of this execution: %d.%d\n", shmclock_shmptr->second, shmclock_shmptr->nanosecond);
 	logOutput(logfile, "Number of memory accesses per nanosecond: %f memory/second\n", memPerSecond);
 	logOutput(logfile, "Number of page faults per memory access: %f pagefault/access\n", pagefaultPerAccess);
 	logOutput(logfile, "Average memory access speed: %f ms/n\n", avgMem);
-	logOutput(logfile, "Total memory access time: %f ms\n", (double)total_access_time / 1000000.0);
+	logOutput(logfile, "Total memory access time: %f ms\n", (double)totalAccess / 1000000.0);
 	
 	printf("More information can be found in our log file named: %s\n\n", logfile);
 	cleanUp(); // Clean up our resources
