@@ -1,5 +1,6 @@
 // Author: Tyler Ziggas
 // Date: May 2021
+// This is the file for the user processes as we figure out if the memory can be referenced/requested
 
 #include "oss.h"
 

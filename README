@@ -1,12 +1,12 @@
 Author: Tyler Ziggas
 Date: May 2021
 
-The purpose of this project is to use FIFO algorithm to demonstrate swapping and paging, and simulating memory management.
+The purpose of this project is to use FIFO algorithm with dirty bit optimization to demonstrate swapping and paging, and simulating memory management.
 
 This project is invoked by the following commands:
 ./oss (to run the project)
 -l (logfile) to rename the logfile
--p (processes) to change the number of processes
+-p (processes) to change the number of processes (a min of 20 and a max of 40)
 -h to see the help menu
 
 Implemented Steps for this project: 
